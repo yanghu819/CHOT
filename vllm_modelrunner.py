@@ -1766,21 +1766,24 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             if 1: 
                 print("DEBUG - Starting CHOT optimization")
                 chot_steps = int(os.environ.get("CHOT_STEPS", "3"))
-                chot_lr = float(os.environ.get("CHOT_LR", "1e-4"))
+                chot_lr = float(os.environ.get("CHOT_LR", "1"))
                 print(f"DEBUG - CHOT parameters: steps={chot_steps}, lr={chot_lr}")
                 
                 try:
                     print("DEBUG - Creating ptuning parameters")
-                    # 创建正确维度的可学习参数张量 (无需梯度)
+   
                     self.ptuning_params = torch.zeros(
-                        1, self.model.lm_head.embedding_dim, 
+                        self.model.lm_head.embedding_dim,  # 只保留embedding维度
                         device=hidden_or_intermediate_states.device,
                         dtype=hidden_or_intermediate_states.dtype
                     )
+
+
+
                     print(f"DEBUG - ptuning_params created: {self.ptuning_params.shape}, {self.ptuning_params.dtype}")
                     
                     # 使用简单的sign SGD
-                    weight_decay = 1e-5  # 权重衰减率
+                    weight_decay = 0  # 权重衰减率
                     
                     # 运行优化步骤
                     for step in range(chot_steps):
@@ -1987,7 +1990,11 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                         # 梯度只影响ptuning_params (等于所有位置的梯度和)
                         try:
                             print("DEBUG - Computing gradient for ptuning_params")
-                            d_ptuning = d_hidden.sum(dim=(0, 1), keepdim=True)
+                            # d_ptuning = d_hidden.sum(dim=(0, 1), keepdim=True)
+                            # d_ptuning = d_hidden.sum(dim=0, keepdim=True).unsqueeze(0)
+                            d_ptuning = d_hidden.mean(dim=0)
+
+
                             print(f"DEBUG - d_ptuning shape: {d_ptuning.shape}, dtype: {d_ptuning.dtype}")
                         except Exception as e:
                             print(f"DEBUG - Error in gradient aggregation: {e}")
@@ -2013,9 +2020,12 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                             print(f"DEBUG - grad_sign: {grad_sign.shape}, {grad_sign.dtype}")
                             
                             # 更新参数
-                            self.ptuning_params = self.ptuning_params - chot_lr * (
-                                grad_sign + weight_decay * self.ptuning_params
-                            )
+                            # self.ptuning_params = self.ptuning_params - chot_lr * (
+                            #     grad_sign + weight_decay * self.ptuning_params
+                            # )
+                            self.ptuning_params = self.ptuning_params - chot_lr * grad_sign - chot_lr * weight_decay * self.ptuning_params
+
+
                             print(f"DEBUG - Updated ptuning_params: min={self.ptuning_params.min().item()}, "
                                 f"max={self.ptuning_params.max().item()}, "
                                 f"mean={self.ptuning_params.mean().item()}")
@@ -2033,6 +2043,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
             
             # 应用优化后的参数
             if hasattr(self, 'ptuning_params') and self.ptuning_params is not None:
+                print(self.ptuning_params.mean(), self.ptuning_params.max(), self.ptuning_params.min())
                 print("DEBUG - Applying ptuning parameters to hidden states")
                 print(f"DEBUG - Before: hidden_states shape: {hidden_or_intermediate_states.shape}")
                 hidden_or_intermediate_states = hidden_or_intermediate_states + self.ptuning_params
