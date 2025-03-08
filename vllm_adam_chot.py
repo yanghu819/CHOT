@@ -1765,7 +1765,7 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
 
             if 1: 
                 print("DEBUG - Starting CHOT optimization")
-                chot_steps = int(os.environ.get("CHOT_STEPS", "3"))
+                chot_steps = int(os.environ.get("CHOT_STEPS", "1"))
                 chot_lr = float(os.environ.get("CHOT_LR", "0.1"))
                 print(f"DEBUG - CHOT parameters: steps={chot_steps}, lr={chot_lr}")
                 
@@ -1784,8 +1784,8 @@ class ModelRunner(GPUModelRunnerBase[ModelInputForGPUWithSamplingMetadata]):
                     self.adam_m = torch.zeros_like(self.ptuning_params)  # First moment
                     self.adam_v = torch.zeros_like(self.ptuning_params)  # Second moment
                     beta1 = 0.9  # Adam beta1
-                    beta2 = 0.999  # Adam beta2
-                    eps = 1e-8  # Adam epsilon
+                    beta2 = 0.95  # Adam beta2
+                    eps = 1e-6  # Adam epsilon
                     step = 0  # Adam step counter
 
                     print(f"DEBUG - ptuning_params created: {self.ptuning_params.shape}, {self.ptuning_params.dtype}")
