@@ -4,7 +4,7 @@ import logging
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
-from matplotlib.colors import TwoSlopeNorm
+from matplotlib.colors import TwoSlopeNorm, LinearSegmentedColormap
 from transformers import AutoTokenizer
 
 # --- Basic Configuration ---
@@ -32,13 +32,13 @@ output_dir_png = os.path.join(base_dir, "visualizations_png_matplotlib_text_adju
 # --- Matplotlib Plotting Constants ---
 FIG_WIDTH_INCHES = 18
 FIG_HEIGHT_INCHES = 10
-FONT_SIZE = 8
+FONT_SIZE = 12
 H_CHAR_FACTOR = 0.65 # Character width factor
 V_PADDING = 0.030 # Vertical padding
 TITLE_SPACE = 0.05
-NEUTRAL_COLOR = '#888888'
+NEUTRAL_COLOR = 'black'
 BBOX_PAD = 0.15 # Bbox padding (as a fraction of fontsize, used in points) - VALUE used in f-string now
-INTER_TOKEN_H_PAD_NORM = 0.004 # Horizontal padding
+INTER_TOKEN_H_PAD_NORM = 0.008 # ADJUSTED - Horizontal padding
 
 # --- Load Data ---
 try:
@@ -131,8 +131,7 @@ def plot_tokens_matplotlib_text(fig, ax, tokens, start_y, color_info, fig_width_
                 fontsize=FONT_SIZE,
                 family=plt.rcParams['font.family'],
                 ha='left', va='top',
-                # *** CORRECTED THIS LINE ***
-                bbox=dict(boxstyle=f'round,pad={BBOX_PAD}', fc=bg_color, ec='grey', lw=0.5, alpha=0.8))
+                bbox=dict(boxstyle=f'round,pad={BBOX_PAD}', fc=bg_color, ec='#cccccc', lw=0.3, alpha=0.7))
 
         x_pos += current_token_width_estimate + INTER_TOKEN_H_PAD_NORM
         if y_pos < 0.1: logging.warning("Plot truncated"); ax.text(x_pos, y_pos, "...", color='red'); break
@@ -158,8 +157,19 @@ for i in range(num_samples):
         max_vocab_idx = current_delta_w.shape[0] - 1 if current_delta_w.size > 0 else -1
         valid_r_ids = [tid for tid in r_ids if 0 <= tid <= max_vocab_idx]
 
-        # --- Colormap Setup (Centered at Zero) ---
-        cmap = cm.get_cmap('coolwarm')
+        # --- Colormap Setup (Blue -> Black -> Red Gradient) ---
+        # coolwarm = cm.get_cmap('coolwarm')
+        # colors = coolwarm(np.linspace(0, 1, 256))
+        # mid_point = 128 # Center index for 256 colors
+        # colors[mid_point-2:mid_point+3, :] = [0, 0, 0, 1] # Set center 5 points to black
+        # cmap = LinearSegmentedColormap.from_list('coolwarm_black_center', colors)
+
+        colors = [(0, 0, 1), (0, 0, 0), (1, 0, 0)]  # Blue, Black, Red
+        # For a "darker" blue and red, you could use something like:
+        # colors = [(0, 0, 0.7), (0, 0, 0), (0.7, 0, 0)] # Dark Blue, Black, Dark Red
+        cmap_name = 'blue_black_red'
+        cmap = LinearSegmentedColormap.from_list(cmap_name, colors, N=256)
+
         norm_right = None; delta_values = []
         if valid_r_ids and max_vocab_idx >= 0:
             try: # NaN Filtering and Normalization (same as before)
@@ -181,7 +191,7 @@ for i in range(num_samples):
 
         # --- Add Horizontal Colorbar at the TOP (if needed) ---
         colorbar_height_norm = 0.02 # Height of the horizontal colorbar
-        colorbar_v_pad = 0.008 # REDUCED Padding below the colorbar
+        colorbar_v_pad = 0.003 # ADJUSTED - Padding below the colorbar
         if norm_right:
             try:
                 cax = fig.add_axes([0.15, current_y - colorbar_height_norm - 0.01, 0.7, colorbar_height_norm]) # Position near top
